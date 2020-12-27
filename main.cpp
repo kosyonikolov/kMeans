@@ -138,6 +138,25 @@ double sqDistance(const cv::Point2d & a, const cv::Point2d & b)
     return dx * dx + dy * dy;
 }
 
+template<typename _URNG>
+std::vector<cv::Point2d> makeInitialCenters(const ImageDesciptor & desc,
+                                            const int count,
+                                            _URNG & rng)
+{
+    std::vector<cv::Point2d> result(count);
+
+    std::uniform_real_distribution<double> xDist(desc.xMin, desc.xMax);
+    std::uniform_real_distribution<double> yDist(desc.yMin, desc.yMax);
+
+    for (int i = 0; i < count; i++)
+    {
+        result[i].x = xDist(rng);
+        result[i].y = yDist(rng);
+    }
+
+    return result;
+}
+    
 bool classifyAndUpdate(const std::vector<cv::Point2d> & points,
                        const std::vector<cv::Point2d> & centers,
                        std::vector<int> & outClusterId,
@@ -212,14 +231,23 @@ int main(int argc, char** argv)
     cv::Mat image = cv::Mat::zeros(700, 700, CV_8UC3);
     const ImageDesciptor desc = createDescriptor(points, image.cols, image.rows);
 
-    for (auto & pt : points)
+    std::random_device rng;
+    std::default_random_engine dre(rng());
+
+    std::vector<cv::Point2d> centers = makeInitialCenters(desc, clusters, dre);
+    std::vector<cv::Point2d> newCenters = centers;
+    std::vector<int> clusterId(points.size());
+
+    while (classifyAndUpdate(points, centers, clusterId, newCenters))
     {
-        cv::Point2i point = desc.pt2img(pt);
-        cv::circle(image, point, 2, cv::Scalar(255, 255 ,255), cv::FILLED);
+        drawPoints(image, points, centers, clusterId, desc);
+        cv::imshow("output", image);
+        cv::waitKey();
+        centers = newCenters;
     }
 
+    drawPoints(image, points, centers, clusterId, desc);
     cv::imshow("output", image);
-    cv::waitKey();
 
     return 0;
 }
