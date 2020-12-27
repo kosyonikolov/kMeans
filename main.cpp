@@ -58,8 +58,8 @@ ImageDesciptor createDescriptor(const std::vector<cv::Point2d> & points,
         
         xMin = std::min(xMin, pt.x);
         xMax = std::max(xMax, pt.x);
-        yMin = std::min(xMin, pt.y);
-        yMax = std::max(xMax, pt.y);
+        yMin = std::min(yMin, pt.y);
+        yMax = std::max(yMax, pt.y);
     }
 
     result.xMin = xMin;
