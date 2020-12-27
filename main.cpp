@@ -6,6 +6,7 @@
 #include <fstream>
 #include <algorithm>
 #include <utility>
+#include <cmath>
 
 #include <opencv2/opencv.hpp>
 
@@ -250,6 +251,47 @@ bool classifyAndUpdate(const std::vector<cv::Point2d> & points,
     return haveDifferent;
 }
 
+void calcStDevAvgDist(const std::vector<cv::Point2d> & points,
+                      const std::vector<cv::Point2d> & centers,
+                      const std::vector<int> & clusterId,
+                      std::vector<double> & outStDev,
+                      std::vector<double> & outAvgDist)
+{
+    for (int i = 0; i < centers.size(); i++)
+    {
+        double sqSum = 0;
+        double sum = 0;
+        int count = 0;
+
+        const auto & center = centers[i];
+
+        for (int j = 0; j < points.size(); j++)
+        {
+            if (clusterId[j] != i) continue;
+            
+            const double sqDist = sqDistance(center, points[j]);
+            sqSum += sqDist;
+            sum += std::sqrt(sqDist);
+            count++;
+        }
+
+        outStDev[i] = std::sqrt(sqSum / std::max(1, count - 1)); // avoid div0
+        outAvgDist[i] = sum / std::max(1, count);
+    }
+}
+
+double calcScore(const std::vector<double> & stDev,
+                 const std::vector<double> & avgDist)
+{
+    double score = 0;
+    for (int i = 0; i < stDev.size(); i++)
+    {
+        score += stDev[i] * avgDist[i];
+    }
+
+    return score;
+}
+
 int main(int argc, char** argv) 
 {
     const std::string USAGE_MSG = "Usage: ./kMeans [points] [cluster count]";
@@ -282,21 +324,56 @@ int main(int argc, char** argv)
     std::random_device rng;
     std::default_random_engine dre(rng());
 
-    std::vector<cv::Point2d> centers = makeInitialCenters2(points, clusters, dre);
-    std::vector<cv::Point2d> newCenters = centers;
-    std::vector<int> clusterId(points.size());
+    const int nRestarts = 20;
 
-    while (classifyAndUpdate(points, centers, clusterId, newCenters))
+    // output buffers
+    std::vector<cv::Point2d> bestCenters;
+    std::vector<int> bestIds;
+    double bestScore = 1e300;
+
+    // work buffers
+    std::vector<int> clusterId(points.size());
+    std::vector<double> stDev(points.size());
+    std::vector<double> avgDist(points.size());
+
+    for (int i = 0; i < nRestarts; i++)
     {
-        drawPoints(image, points, centers, clusterId, desc);
-        //cv::imshow("iteration", image);
-        //cv::waitKey(100);
-        centers = newCenters;
+        std::vector<cv::Point2d> centers = makeInitialCenters2(points, clusters, dre);
+        std::vector<cv::Point2d> newCenters = centers;
+
+        int nIters = 0;
+
+        while (classifyAndUpdate(points, centers, clusterId, newCenters))
+        {
+            drawPoints(image, points, centers, clusterId, desc);
+            //cv::imshow("iteration", image);
+            //cv::waitKey(100);
+            centers = newCenters;
+            nIters++;
+        }
+
+        calcStDevAvgDist(points, centers, clusterId, stDev, avgDist);
+        const double score = calcScore(stDev, avgDist);
+
+        if (score < bestScore)
+        {
+            bestScore = score;
+            bestCenters = centers;
+            bestIds = clusterId;
+        }
+
+        std::cout << i << "\t" << nIters << "\t" << bestScore << "\n";
+
+        // std::cout << "AvgDist\tStDev\n";
+        // for (int i = 0; i < centers.size(); i++)
+        // {
+        //     std::cout << avgDist[i] << "\t" << stDev[i] << "\n";
+        // }
     }
 
     //cv::destroyAllWindows();
 
-    drawPoints(image, points, centers, clusterId, desc);
+    drawPoints(image, points, bestCenters, bestIds, desc);
     cv::imshow("output", image);
     cv::waitKey();
 
