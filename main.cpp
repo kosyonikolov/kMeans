@@ -375,6 +375,7 @@ int main(int argc, char** argv)
 
     drawPoints(image, points, bestCenters, bestIds, desc);
     cv::imshow("output", image);
+    cv::imwrite("output.bmp", image);
     cv::waitKey();
 
     return 0;
