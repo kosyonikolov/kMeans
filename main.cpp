@@ -244,7 +244,7 @@ bool classifyAndUpdate(const std::vector<cv::Point2d> & points,
     bool haveDifferent = false;
     for (int i = 0; i < clusters; i++)
     {
-        outNewCenters[i] /= count[i];
+        outNewCenters[i] /= std::max(1, count[i]);
         haveDifferent |= outNewCenters[i] != centers[i];
     }
 
@@ -289,7 +289,7 @@ double calcScore(const std::vector<double> & stDev,
         score += stDev[i] * avgDist[i];
     }
 
-    return score;
+    return std::sqrt(score);
 }
 
 int main(int argc, char** argv) 
@@ -347,7 +347,7 @@ int main(int argc, char** argv)
         {
             drawPoints(image, points, centers, clusterId, desc);
             //cv::imshow("iteration", image);
-            //cv::waitKey(100);
+            //cv::waitKey(16);
             centers = newCenters;
             nIters++;
         }
@@ -362,7 +362,7 @@ int main(int argc, char** argv)
             bestIds = clusterId;
         }
 
-        std::cout << i << "\t" << nIters << "\t" << bestScore << "\n";
+        std::cout << i << "\t" << nIters << "\t" << score << "\n";
 
         // std::cout << "AvgDist\tStDev\n";
         // for (int i = 0; i < centers.size(); i++)
