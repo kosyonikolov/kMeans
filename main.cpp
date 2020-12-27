@@ -5,6 +5,7 @@
 #include <vector>
 #include <fstream>
 #include <algorithm>
+#include <utility>
 
 #include <opencv2/opencv.hpp>
 
@@ -106,7 +107,7 @@ void drawPoints(cv::Mat & image,
     for (int i = 0; i < points.size(); i++)
     {
         const cv::Point2i point = desc.pt2img(points[i]);
-        cv::circle(image, point, 2, colors[clusterId[i]], cv::FILLED);
+        cv::circle(image, point, 1, colors[clusterId[i]], cv::FILLED);
     }
 
     // ======== Draw centers ========
@@ -154,7 +155,58 @@ std::vector<cv::Point2d> makeInitialCenters(const std::vector<cv::Point2d> & poi
 
     return result;
 }
+
+template<typename _URNG>
+std::vector<cv::Point2d> makeInitialCenters2(const std::vector<cv::Point2d> & points,
+                                             const int count,
+                                             _URNG & rng)
+{
+    std::vector<cv::Point2d> result(count);
+
+    std::uniform_int_distribution<int> idxDist(0, points.size() - 1);
+    result[0] = points[idxDist(rng)];
+
+    std::vector<std::pair<double, int>> distance(points.size());
+
+    for (int i = 1; i < count; i++)
+    {
+        double distSum = 0;
+        
+        // calc all distances
+        for (int j = 0; j < points.size(); j++)
+        {
+            distance[j].second = j;
+
+            const auto & pt = points[j];
+            double dist = sqDistance(pt, result[0]);
+            for (int k = 1; k < i; k++) dist = std::min(dist, sqDistance(pt, result[k]));
+            
+            distance[j].first = dist;
+            distSum += dist;
+        }
+
+        // sort by distances, then select point
+        std::sort(distance.begin(), distance.end(), std::greater<std::pair<double, int>>());
+
+        std::uniform_real_distribution<double> pDist(0, distSum);
+        const double p = pDist(rng);
+
+        int idx = 0;
+        double sum = 0;
+        while (idx < distance.size())
+        {
+            sum += distance[idx].first;
+            if (sum >= p) break;
+            idx++;
+        } 
     
+        idx = std::min(idx, (int)points.size() - i - 1); // prevent reusing already used centers
+        result[i] = points[distance[idx].second];
+    }
+
+    return result;
+}
+
 bool classifyAndUpdate(const std::vector<cv::Point2d> & points,
                        const std::vector<cv::Point2d> & centers,
                        std::vector<int> & outClusterId,
@@ -202,8 +254,6 @@ int main(int argc, char** argv)
 {
     const std::string USAGE_MSG = "Usage: ./kMeans [points] [cluster count]";
 
-    cv::Point2d test;
-
     if (argc != 3)
     {
         std::cerr << USAGE_MSG << "\n";
@@ -232,19 +282,19 @@ int main(int argc, char** argv)
     std::random_device rng;
     std::default_random_engine dre(rng());
 
-    std::vector<cv::Point2d> centers = makeInitialCenters(points, clusters, dre);
+    std::vector<cv::Point2d> centers = makeInitialCenters2(points, clusters, dre);
     std::vector<cv::Point2d> newCenters = centers;
     std::vector<int> clusterId(points.size());
 
     while (classifyAndUpdate(points, centers, clusterId, newCenters))
     {
         drawPoints(image, points, centers, clusterId, desc);
-        cv::imshow("iteration", image);
-        cv::waitKey(100);
+        //cv::imshow("iteration", image);
+        //cv::waitKey(100);
         centers = newCenters;
     }
 
-    cv::destroyAllWindows();
+    //cv::destroyAllWindows();
 
     drawPoints(image, points, centers, clusterId, desc);
     cv::imshow("output", image);
